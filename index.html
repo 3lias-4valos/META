@@ -197,6 +197,49 @@ tbody tr:hover { background: var(--surface-2); }
 }
 .toast.show { opacity: 1; }
 .toast.toast-error { background: var(--danger); color: #fff; box-shadow: 0 0 10px rgba(255,107,107,0.5); }
+
+/* TABS */
+.tab-bar {
+  display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 4px; margin-bottom: 20px; max-width: fit-content;
+}
+.tab-btn {
+  border: none; background: transparent; color: var(--ink-muted);
+  padding: 9px 18px; border-radius: 7px; font-size: 13.5px; font-weight: 700;
+  transition: all .15s;
+}
+.tab-btn:hover { color: var(--ink); background: var(--surface-2); }
+.tab-btn.on { background: var(--accent-shine); background-size: 220% 220%; color: #071018; box-shadow: var(--accent-glow); }
+.tab-view { display: none; }
+.tab-view.on { display: block; }
+
+/* REPORTE */
+.report-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+.report-controls label { font-size: 13px; color: var(--ink-muted); }
+.report-controls select {
+  height: 38px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 13.5px; background: var(--surface-2); color: var(--ink);
+}
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px 18px;
+}
+.kpi-lbl { font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; }
+.kpi-val { font-size: 26px; font-weight: 800; color: var(--ink); }
+.kpi-val.accent { color: var(--accent); }
+.plan-breakdown { display: flex; flex-direction: column; gap: 10px; }
+.plan-row { display: flex; align-items: center; gap: 12px; }
+.plan-name { font-size: 13px; font-weight: 600; min-width: 90px; color: var(--ink); }
+.plan-bar-wrap { flex: 1; height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.plan-bar { height: 100%; background: var(--accent-shine); background-size: 220% 220%; border-radius: 4px; }
+.plan-count { font-size: 13px; font-weight: 700; color: var(--accent); min-width: 26px; text-align: right; }
+.btn-export {
+  height: 38px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--ink); font-size: 13px; font-weight: 700;
+  margin-left: auto;
+}
+.btn-export:hover { background: var(--border); }
 </style>
 </head>
 <body>
@@ -244,50 +287,94 @@ tbody tr:hover { background: var(--surface-2); }
       Revisa que la URL de Realtime Database en el código sea correcta y que las reglas de acceso permitan usuarios autenticados. También puede deberse a un bloqueador de anuncios/antivirus.
     </div>
 
-    <div class="card">
-      <div class="section-title">Nuevo cliente</div>
-      <div class="error-msg" id="form-error"></div>
-      <div class="form-grid">
-        <div class="field"><label>Nombre</label><input type="text" id="f-nombre"></div>
-        <div class="field"><label>Apellido paterno</label><input type="text" id="f-apellido-p"></div>
-        <div class="field"><label>Apellido materno</label><input type="text" id="f-apellido-m"></div>
-        <div class="field"><label>Edad</label><input type="number" id="f-edad" min="0"></div>
-        <div class="field">
-          <label>Sexo</label>
-          <select id="f-sexo">
-            <option value="M">Masculino</option>
-            <option value="F">Femenino</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Plan</label>
-          <select id="f-plan">
-            <option value="visita">Visita</option>
-            <option value="semanal">Semanal</option>
-            <option value="mensual">Mensual</option>
-            <option value="anual">Anual</option>
-          </select>
-        </div>
-      </div>
-      <button class="btn-primary" id="save-btn" onclick="saveClient()">Registrar cliente</button>
+    <div class="tab-bar">
+      <button class="tab-btn on" onclick="setTab('registrar', this)">Registrar</button>
+      <button class="tab-btn" onclick="setTab('clientes', this)">Clientes</button>
+      <button class="tab-btn" onclick="setTab('reporte', this)">Reporte mensual</button>
     </div>
 
-    <div class="card">
-      <div class="toolbar">
-        <div class="section-title" style="margin-bottom:0">Clientes registrados</div>
-        <input type="text" class="search-input" id="search" placeholder="Buscar por nombre..." oninput="renderList()">
+    <!-- TAB: REGISTRAR -->
+    <div class="tab-view on" id="tab-registrar">
+      <div class="card">
+        <div class="section-title">Nuevo cliente</div>
+        <div class="error-msg" id="form-error"></div>
+        <div class="form-grid">
+          <div class="field"><label>Nombre</label><input type="text" id="f-nombre"></div>
+          <div class="field"><label>Apellido paterno</label><input type="text" id="f-apellido-p"></div>
+          <div class="field"><label>Apellido materno</label><input type="text" id="f-apellido-m"></div>
+          <div class="field"><label>Edad</label><input type="number" id="f-edad" min="0"></div>
+          <div class="field">
+            <label>Sexo</label>
+            <select id="f-sexo">
+              <option value="M">Masculino</option>
+              <option value="F">Femenino</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Plan</label>
+            <select id="f-plan">
+              <option value="visita">Visita</option>
+              <option value="semanal">Semanal</option>
+              <option value="mensual">Mensual</option>
+              <option value="anual">Anual</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn-primary" id="save-btn" onclick="saveClient()">Registrar cliente</button>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Nombre completo</th><th>Sexo</th><th>Edad</th><th>Plan</th><th>Registrado</th><th></th>
-            </tr>
-          </thead>
-          <tbody id="client-tbody"></tbody>
-        </table>
+    </div>
+
+    <!-- TAB: CLIENTES -->
+    <div class="tab-view" id="tab-clientes">
+      <div class="card">
+        <div class="toolbar">
+          <div class="section-title" style="margin-bottom:0">Clientes registrados</div>
+          <input type="text" class="search-input" id="search" placeholder="Buscar por nombre..." oninput="renderList()">
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre completo</th><th>Sexo</th><th>Edad</th><th>Plan</th><th>Registrado</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="client-tbody"></tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="empty-state" style="display:none">Aún no hay clientes registrados. Usa el formulario de arriba para agregar el primero.</div>
       </div>
-      <div class="empty-state" id="empty-state" style="display:none">Aún no hay clientes registrados. Usa el formulario de arriba para agregar el primero.</div>
+    </div>
+
+    <!-- TAB: REPORTE MENSUAL -->
+    <div class="tab-view" id="tab-reporte">
+      <div class="report-controls">
+        <label>Período:</label>
+        <select id="rep-mes" onchange="renderReport()"></select>
+        <select id="rep-anio" onchange="renderReport()"></select>
+        <button class="btn-export" onclick="exportReportCSV()"><span>⬇</span> Exportar CSV</button>
+      </div>
+
+      <div class="kpi-row" id="rep-kpis"></div>
+
+      <div class="card">
+        <div class="section-title">Altas por plan</div>
+        <div class="plan-breakdown" id="rep-planes"></div>
+      </div>
+
+      <div class="card" style="margin-top:20px">
+        <div class="section-title">Clientes registrados en el período</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre completo</th><th>Sexo</th><th>Edad</th><th>Plan</th><th>Fecha</th>
+              </tr>
+            </thead>
+            <tbody id="rep-tbody"></tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="rep-empty" style="display:none">No hubo altas registradas en este período.</div>
+      </div>
     </div>
   </div>
 </div>
@@ -368,6 +455,7 @@ onAuthStateChanged(auth, (user) => {
   if (user) {
     document.getElementById('nav-email').textContent = user.email;
     showScreen('screen-panel');
+    buildReportSelectors();
     startListening();
   } else {
     if (listenerAttached) { off(clientesRef); listenerAttached = false; }
@@ -375,6 +463,15 @@ onAuthStateChanged(auth, (user) => {
     showScreen('screen-login');
   }
 });
+
+/* ══ TABS ══ */
+window.setTab = (name, btn) => {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('on'));
+  document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('tab-' + name).classList.add('on');
+  if (name === 'reporte') renderReport();
+};
 
 /* ══ REALTIME DATABASE ══ */
 function startListening() {
@@ -397,6 +494,7 @@ function startListening() {
     showLoader(false);
     showConnWarning(false);
     renderList();
+    if (document.getElementById('tab-reporte').classList.contains('on')) renderReport();
   }, (err) => {
     clearTimeout(timeoutId);
     showLoader(false);
@@ -485,6 +583,123 @@ window.renderList = () => {
       <td><button class="btn-danger-text" onclick="deleteClient('${c.id}')">Eliminar</button></td>
     </tr>
   `).join('');
+};
+
+/* ══ REPORTE MENSUAL ══ */
+const MESES_LBL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const PLANES = ['visita','semanal','mensual','anual'];
+
+function buildReportSelectors() {
+  const now = new Date();
+  const selMes = document.getElementById('rep-mes');
+  const selAnio = document.getElementById('rep-anio');
+  if (selMes.dataset.built) return; // ya se armó, no repetir
+
+  selMes.innerHTML = MESES_LBL.map((m, i) =>
+    `<option value="${i}" ${i === now.getMonth() ? 'selected' : ''}>${m}</option>`
+  ).join('');
+  selMes.dataset.built = '1';
+
+  const curYear = now.getFullYear();
+  const years = [];
+  for (let y = curYear - 2; y <= curYear + 1; y++) years.push(y);
+  selAnio.innerHTML = years.map(y =>
+    `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}</option>`
+  ).join('');
+}
+
+function getReportData() {
+  const mes = parseInt(document.getElementById('rep-mes').value);
+  const anio = parseInt(document.getElementById('rep-anio').value);
+  const data = clients.filter(c => {
+    if (!c.fecha_registro) return false;
+    const d = new Date(c.fecha_registro);
+    return d.getMonth() === mes && d.getFullYear() === anio;
+  });
+  return { mes, anio, data };
+}
+
+window.renderReport = () => {
+  const { mes, anio, data } = getReportData();
+
+  // KPIs
+  const porSexoM = data.filter(c => c.sexo === 'M').length;
+  const porSexoF = data.filter(c => c.sexo === 'F').length;
+  document.getElementById('rep-kpis').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-lbl">Nuevos clientes</div>
+      <div class="kpi-val accent">${data.length}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-lbl">Masculino</div>
+      <div class="kpi-val">${porSexoM}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-lbl">Femenino</div>
+      <div class="kpi-val">${porSexoF}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-lbl">Período</div>
+      <div class="kpi-val" style="font-size:16px">${MESES_LBL[mes]} ${anio}</div>
+    </div>
+  `;
+
+  // Desglose por plan
+  const counts = {};
+  PLANES.forEach(p => counts[p] = 0);
+  data.forEach(c => { if (counts[c.plan] !== undefined) counts[c.plan]++; });
+  const max = Math.max(...Object.values(counts), 1);
+  document.getElementById('rep-planes').innerHTML = PLANES.map(p => `
+    <div class="plan-row">
+      <span class="plan-name">${p.charAt(0).toUpperCase() + p.slice(1)}</span>
+      <div class="plan-bar-wrap"><div class="plan-bar" style="width:${(counts[p] / max * 100).toFixed(1)}%"></div></div>
+      <span class="plan-count">${counts[p]}</span>
+    </div>
+  `).join('');
+
+  // Tabla del período
+  const tbody = document.getElementById('rep-tbody');
+  const empty = document.getElementById('rep-empty');
+  if (!data.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  const sorted = [...data].sort((a, b) => (b.fecha_registro || 0) - (a.fecha_registro || 0));
+  tbody.innerHTML = sorted.map(c => `
+    <tr>
+      <td>${c.nombre} ${c.apellido_p} ${c.apellido_m}</td>
+      <td>${c.sexo}</td>
+      <td>${c.edad}</td>
+      <td><span class="badge badge-${c.plan}">${c.plan}</span></td>
+      <td>${formatDate(c.fecha_registro)}</td>
+    </tr>
+  `).join('');
+};
+
+window.exportReportCSV = () => {
+  const { mes, anio, data } = getReportData();
+  if (!data.length) { showToast('No hay datos para exportar en este período', true); return; }
+
+  const headers = ['Nombre', 'Apellido paterno', 'Apellido materno', 'Sexo', 'Edad', 'Plan', 'Fecha de registro'];
+  const rows = data.map(c => [
+    c.nombre, c.apellido_p, c.apellido_m, c.sexo, c.edad, c.plan, formatDate(c.fecha_registro)
+  ]);
+  const csv = [headers, ...rows]
+    .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `reporte_${MESES_LBL[mes]}_${anio}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Reporte exportado');
 };
 </script>
 </body>
