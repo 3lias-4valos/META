@@ -239,11 +239,9 @@ tbody tr:hover { background: var(--surface-2); }
   </div>
 
   <div class="content">
-    <!-- Aviso de conexión bloqueada (oculto por defecto) -->
     <div class="warn-banner" id="conn-warning">
       <strong>⚠️ No se pudo conectar con la base de datos</strong>
-      Parece que un bloqueador de anuncios, antivirus o extensión del navegador está bloqueando la conexión a Firebase.
-      Intenta desactivar temporalmente tu bloqueador de anuncios (uBlock, AdBlock, etc.) para este sitio, o pruébalo en modo incógnito, y recarga la página.
+      Revisa que la URL de Realtime Database en el código sea correcta y que las reglas de acceso permitan usuarios autenticados. También puede deberse a un bloqueador de anuncios/antivirus.
     </div>
 
     <div class="card">
@@ -300,8 +298,8 @@ tbody tr:hover { background: var(--surface-2); }
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
   from 'https://www.gstatic.com/firebasejs/11.7.1/firebase-auth.js';
-import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc }
-  from 'https://www.gstatic.com/firebasejs/11.7.1/firebase-firestore.js';
+import { getDatabase, ref, push, onValue, remove, off, serverTimestamp }
+  from 'https://www.gstatic.com/firebasejs/11.7.1/firebase-database.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDWBNTX9BQfk4smEl6sidvar18a8LSANEk",
@@ -309,20 +307,17 @@ const firebaseConfig = {
   projectId: "meta-wellnes-gym",
   storageBucket: "meta-wellnes-gym.firebasestorage.app",
   messagingSenderId: "403071255541",
-  appId: "1:403071255541:web:60bee00563b7d67f5456bc"
+  appId: "1:403071255541:web:60bee00563b7d67f5456bc",
+  databaseURL: "https://meta-wellnes-gym-default-rtdb.firebaseio.com"
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-// Conexión estándar (streaming). Ya no forzamos long-polling: el retraso y los
-// fallos de conexión venían de una extensión del navegador (ad-blocker/antivirus)
-// bloqueando las peticiones a firestore.googleapis.com, no de la red.
-// Si en el futuro un usuario reporta timeouts en una red corporativa restrictiva,
-// ahí sí se puede volver a evaluar experimentalForceLongPolling.
-const db = getFirestore(app);
+const rtdb = getDatabase(app); // Realtime Database — usa un único WebSocket persistente
+const clientesRef = ref(rtdb, 'clientes');
 
 let clients = [];
-let unsubscribe = null;
+let listenerAttached = false;
 
 /* ══ UI HELPERS ══ */
 function showScreen(id) {
@@ -344,15 +339,6 @@ function showError(id, msg) {
 }
 function hideError(id) {
   document.getElementById(id).classList.remove('show');
-}
-
-/* ══ DETECCIÓN DE CONEXIÓN BLOQUEADA ══
-   err.code de Firestore para estos casos suele ser 'unavailable' cuando la
-   petición nunca llega a completarse (bloqueada por un cliente/extension).
-   También revisamos el mensaje por si acaso, ya que a veces varía. */
-function isLikelyBlockedByExtension(err) {
-  const msg = (err && err.message || '').toLowerCase();
-  return err?.code === 'unavailable' || msg.includes('blocked') || msg.includes('network');
 }
 function showConnWarning(on) {
   document.getElementById('conn-warning').classList.toggle('show', on);
@@ -384,32 +370,41 @@ onAuthStateChanged(auth, (user) => {
     showScreen('screen-panel');
     startListening();
   } else {
-    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+    if (listenerAttached) { off(clientesRef); listenerAttached = false; }
     clients = [];
     showScreen('screen-login');
   }
 });
 
-/* ══ FIRESTORE ══ */
+/* ══ REALTIME DATABASE ══ */
 function startListening() {
   showLoader(true);
   showConnWarning(false);
-  const q = query(collection(db, 'clientes'), orderBy('fecha_registro', 'desc'));
-  unsubscribe = onSnapshot(q, (snap) => {
-    clients = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  // Timeout de seguridad: si en 8s no hay respuesta, avisamos (RTDB normalmente
+  // conecta en milisegundos, así que si tarda tanto algo está mal).
+  const timeoutId = setTimeout(() => {
+    showLoader(false);
+    showConnWarning(true);
+  }, 8000);
+
+  onValue(clientesRef, (snapshot) => {
+    clearTimeout(timeoutId);
+    const val = snapshot.val() || {};
+    clients = Object.entries(val).map(([id, data]) => ({ id, ...data }));
+    // Orden más reciente primero
+    clients.sort((a, b) => (b.fecha_registro || 0) - (a.fecha_registro || 0));
     showLoader(false);
     showConnWarning(false);
     renderList();
   }, (err) => {
+    clearTimeout(timeoutId);
     showLoader(false);
-    console.error('Firestore onSnapshot error:', err.code, err.message);
-    if (isLikelyBlockedByExtension(err)) {
-      showConnWarning(true);
-      showToast('Conexión bloqueada — revisa tu bloqueador de anuncios/antivirus', true);
-    } else {
-      showToast('Error al cargar clientes: ' + err.message, true);
-    }
+    console.error('Realtime Database error:', err.code, err.message);
+    showConnWarning(true);
+    showToast('Error de conexión: ' + err.message, true);
   });
+  listenerAttached = true;
 }
 
 window.saveClient = async () => {
@@ -429,21 +424,17 @@ window.saveClient = async () => {
   const btn = document.getElementById('save-btn');
   btn.disabled = true; btn.textContent = 'Guardando...';
   try {
-    await addDoc(collection(db, 'clientes'), {
+    await push(clientesRef, {
       nombre, apellido_p, apellido_m, edad, sexo, plan,
-      fecha_registro: new Date(),
+      fecha_registro: serverTimestamp(),
     });
     ['f-nombre', 'f-apellido-p', 'f-apellido-m', 'f-edad'].forEach(id => document.getElementById(id).value = '');
     showToast('Cliente registrado');
     showConnWarning(false);
   } catch (err) {
-    console.error('Firestore addDoc error:', err.code, err.message);
-    if (isLikelyBlockedByExtension(err)) {
-      showConnWarning(true);
-      showError('form-error', 'No se pudo guardar: la conexión a la base de datos está bloqueada (revisa tu bloqueador de anuncios/antivirus).');
-    } else {
-      showError('form-error', 'No se pudo guardar: ' + err.message);
-    }
+    console.error('Realtime Database push error:', err.code, err.message);
+    showConnWarning(true);
+    showError('form-error', 'No se pudo guardar: ' + err.message);
   }
   btn.disabled = false; btn.textContent = 'Registrar cliente';
 };
@@ -451,22 +442,17 @@ window.saveClient = async () => {
 window.deleteClient = async (id) => {
   if (!confirm('¿Eliminar este cliente?')) return;
   try {
-    await deleteDoc(doc(db, 'clientes', id));
+    await remove(ref(rtdb, 'clientes/' + id));
     showToast('Cliente eliminado');
   } catch (err) {
-    console.error('Firestore deleteDoc error:', err.code, err.message);
-    if (isLikelyBlockedByExtension(err)) {
-      showConnWarning(true);
-      showToast('No se pudo eliminar — conexión bloqueada', true);
-    } else {
-      showToast('Error al eliminar: ' + err.message, true);
-    }
+    console.error('Realtime Database remove error:', err.code, err.message);
+    showToast('Error al eliminar: ' + err.message, true);
   }
 };
 
-function formatDate(ts) {
-  if (!ts) return 'Justo ahora';
-  const date = ts.toDate ? ts.toDate() : new Date(ts);
+function formatDate(ms) {
+  if (!ms) return 'Justo ahora';
+  const date = new Date(ms);
   return date.toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
