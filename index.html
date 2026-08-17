@@ -277,7 +277,7 @@ tbody tr:hover { background: var(--surface-2); }
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
   from 'https://www.gstatic.com/firebasejs/11.7.1/firebase-auth.js';
-import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc }
+import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc }
   from 'https://www.gstatic.com/firebasejs/11.7.1/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -291,7 +291,13 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+// Forzamos long polling en vez de streaming, para evitar que un firewall/antivirus
+// corte la conexión larga a medio camino. Esto hace peticiones HTTP cortas y
+// repetidas en vez de una sola conexión persistente.
+const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+  useFetchStreams: false,
+});
 
 let clients = [];
 let unsubscribe = null;
