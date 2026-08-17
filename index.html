@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Registro de Clientes</title>
+<link rel="icon" href="data:,">
 <style>
 :root {
   --bg: #161d27;
@@ -22,6 +23,9 @@
   --danger: #ff6b6b;
   --danger-bg: rgba(255, 107, 107, 0.12);
   --danger-border: rgba(255, 107, 107, 0.35);
+  --warn: #ffb84d;
+  --warn-bg: rgba(255, 184, 77, 0.14);
+  --warn-border: rgba(255, 184, 77, 0.35);
   --radius: 10px;
 }
 * { box-sizing: border-box; }
@@ -92,6 +96,14 @@ input, select { font-family: inherit; }
   padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none;
 }
 .error-msg.show { display: block; }
+
+.warn-banner {
+  background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-border);
+  padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none;
+  line-height: 1.5;
+}
+.warn-banner.show { display: block; }
+.warn-banner strong { display: block; margin-bottom: 2px; }
 
 /* PANEL */
 .topbar {
@@ -181,8 +193,10 @@ tbody tr:hover { background: var(--surface-2); }
   padding: 10px 22px; border-radius: 10px; font-size: 13px; font-weight: 700;
   opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 9999;
   white-space: nowrap; box-shadow: var(--accent-glow);
+  max-width: 90vw; overflow: hidden; text-overflow: ellipsis;
 }
 .toast.show { opacity: 1; }
+.toast.toast-error { background: var(--danger); color: #fff; box-shadow: 0 0 10px rgba(255,107,107,0.5); }
 </style>
 </head>
 <body>
@@ -200,15 +214,17 @@ tbody tr:hover { background: var(--surface-2); }
     <div class="login-title">Panel de administración</div>
     <div class="login-sub">Inicia sesión para gestionar los registros de clientes.</div>
     <div class="error-msg" id="login-error"></div>
-    <div class="field">
-      <label>Correo</label>
-      <input type="email" id="login-email" placeholder="tu@correo.com">
-    </div>
-    <div class="field">
-      <label>Contraseña</label>
-      <input type="password" id="login-pwd" placeholder="••••••••">
-    </div>
-    <button class="btn-primary" id="login-btn" onclick="doLogin()">Iniciar sesión</button>
+    <form id="login-form" onsubmit="event.preventDefault(); doLogin();">
+      <div class="field">
+        <label>Correo</label>
+        <input type="email" id="login-email" placeholder="tu@correo.com" autocomplete="username">
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input type="password" id="login-pwd" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn-primary" id="login-btn">Iniciar sesión</button>
+    </form>
   </div>
 </div>
 
@@ -223,6 +239,13 @@ tbody tr:hover { background: var(--surface-2); }
   </div>
 
   <div class="content">
+    <!-- Aviso de conexión bloqueada (oculto por defecto) -->
+    <div class="warn-banner" id="conn-warning">
+      <strong>⚠️ No se pudo conectar con la base de datos</strong>
+      Parece que un bloqueador de anuncios, antivirus o extensión del navegador está bloqueando la conexión a Firebase.
+      Intenta desactivar temporalmente tu bloqueador de anuncios (uBlock, AdBlock, etc.) para este sitio, o pruébalo en modo incógnito, y recarga la página.
+    </div>
+
     <div class="card">
       <div class="section-title">Nuevo cliente</div>
       <div class="error-msg" id="form-error"></div>
@@ -277,7 +300,7 @@ tbody tr:hover { background: var(--surface-2); }
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
   from 'https://www.gstatic.com/firebasejs/11.7.1/firebase-auth.js';
-import { getFirestore, initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc }
+import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc }
   from 'https://www.gstatic.com/firebasejs/11.7.1/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -291,13 +314,12 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-// Forzamos long polling en vez de streaming, para evitar que un firewall/antivirus
-// corte la conexión larga a medio camino. Esto hace peticiones HTTP cortas y
-// repetidas en vez de una sola conexión persistente.
-const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-  useFetchStreams: false,
-});
+// Conexión estándar (streaming). Ya no forzamos long-polling: el retraso y los
+// fallos de conexión venían de una extensión del navegador (ad-blocker/antivirus)
+// bloqueando las peticiones a firestore.googleapis.com, no de la red.
+// Si en el futuro un usuario reporta timeouts en una red corporativa restrictiva,
+// ahí sí se puede volver a evaluar experimentalForceLongPolling.
+const db = getFirestore(app);
 
 let clients = [];
 let unsubscribe = null;
@@ -308,11 +330,12 @@ function showScreen(id) {
   document.getElementById(id).classList.add('active');
 }
 function showLoader(on) { document.getElementById('loader').classList.toggle('show', on); }
-function showToast(msg) {
+function showToast(msg, isError = false) {
   const t = document.getElementById('toast');
   t.textContent = msg;
+  t.classList.toggle('toast-error', isError);
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2600);
+  setTimeout(() => t.classList.remove('show'), isError ? 4500 : 2600);
 }
 function showError(id, msg) {
   const el = document.getElementById(id);
@@ -321,6 +344,18 @@ function showError(id, msg) {
 }
 function hideError(id) {
   document.getElementById(id).classList.remove('show');
+}
+
+/* ══ DETECCIÓN DE CONEXIÓN BLOQUEADA ══
+   err.code de Firestore para estos casos suele ser 'unavailable' cuando la
+   petición nunca llega a completarse (bloqueada por un cliente/extension).
+   También revisamos el mensaje por si acaso, ya que a veces varía. */
+function isLikelyBlockedByExtension(err) {
+  const msg = (err && err.message || '').toLowerCase();
+  return err?.code === 'unavailable' || msg.includes('blocked') || msg.includes('network');
+}
+function showConnWarning(on) {
+  document.getElementById('conn-warning').classList.toggle('show', on);
 }
 
 /* ══ AUTH ══ */
@@ -358,14 +393,22 @@ onAuthStateChanged(auth, (user) => {
 /* ══ FIRESTORE ══ */
 function startListening() {
   showLoader(true);
+  showConnWarning(false);
   const q = query(collection(db, 'clientes'), orderBy('fecha_registro', 'desc'));
   unsubscribe = onSnapshot(q, (snap) => {
     clients = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     showLoader(false);
+    showConnWarning(false);
     renderList();
   }, (err) => {
     showLoader(false);
-    showToast('Error al cargar clientes: ' + err.message);
+    console.error('Firestore onSnapshot error:', err.code, err.message);
+    if (isLikelyBlockedByExtension(err)) {
+      showConnWarning(true);
+      showToast('Conexión bloqueada — revisa tu bloqueador de anuncios/antivirus', true);
+    } else {
+      showToast('Error al cargar clientes: ' + err.message, true);
+    }
   });
 }
 
@@ -392,8 +435,15 @@ window.saveClient = async () => {
     });
     ['f-nombre', 'f-apellido-p', 'f-apellido-m', 'f-edad'].forEach(id => document.getElementById(id).value = '');
     showToast('Cliente registrado');
+    showConnWarning(false);
   } catch (err) {
-    showError('form-error', 'No se pudo guardar: ' + err.message);
+    console.error('Firestore addDoc error:', err.code, err.message);
+    if (isLikelyBlockedByExtension(err)) {
+      showConnWarning(true);
+      showError('form-error', 'No se pudo guardar: la conexión a la base de datos está bloqueada (revisa tu bloqueador de anuncios/antivirus).');
+    } else {
+      showError('form-error', 'No se pudo guardar: ' + err.message);
+    }
   }
   btn.disabled = false; btn.textContent = 'Registrar cliente';
 };
@@ -404,7 +454,13 @@ window.deleteClient = async (id) => {
     await deleteDoc(doc(db, 'clientes', id));
     showToast('Cliente eliminado');
   } catch (err) {
-    showToast('Error al eliminar: ' + err.message);
+    console.error('Firestore deleteDoc error:', err.code, err.message);
+    if (isLikelyBlockedByExtension(err)) {
+      showConnWarning(true);
+      showToast('No se pudo eliminar — conexión bloqueada', true);
+    } else {
+      showToast('Error al eliminar: ' + err.message, true);
+    }
   }
 };
 
